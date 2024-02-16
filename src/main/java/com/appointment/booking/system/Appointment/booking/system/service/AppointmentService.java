@@ -27,7 +27,9 @@ public class AppointmentService {
     AppointmentStatusHistoryRepository appointmentStatusHistoryRepository;
 
     public Appointment book(AppointmentBooking booking) throws Exception {
-        // check for this operator already present or not.
+        /*
+         * If booking already present throw error
+         */
         String status = appointmentRepository.findAppointmentByOperatorAndSlot(booking.getOperatorId(),booking.getSlotEpoch());
         if(status!=null && !status.equals(AppointmentStatus.CANCELLED.toString())) {
             throw new Exception("slot already scheduled");
@@ -55,12 +57,15 @@ public class AppointmentService {
 
     private Appointment updateAppointment(AppointmentActionRequest actionRequest, AppointmentStatus appointmentStatus) throws Exception {
         Appointment appointment = appointmentRepository.getReferenceById(actionRequest.getAppointmentId());
+        /*
+         * if appointment already cancelled then we not allowed to cancel/reschedule.
+         */
         if(appointment.getStatus().equals(AppointmentStatus.CANCELLED)){
             throw new Exception("Appointment already cancelled");
         }
         if(appointmentStatus.equals(AppointmentStatus.CANCELLED)){
             LocalDateTime date = Instant.ofEpochMilli(System.currentTimeMillis()).atZone(ZoneId.systemDefault()).toLocalDateTime();
-            appointment.setDeletedAt(date);
+            appointment.setDeletedAt(date); // soft delete.
         }
         appointment.setStatus(appointmentStatus);
         appointment.setSlot(actionRequest.getSlotEpoch());
@@ -72,7 +77,7 @@ public class AppointmentService {
 
     /*
      * Maintaining history of appointment_status changes BOOKED-> RESCHEDULED -> CANCEL
-     * only person inserts in this table
+     * This table will be useful for audits ( for every update on appointment table we do insert in this table )
      */
     private void saveAppointmentStatusHistory(Appointment appointment){
         AppointmentStatusHistory appointmentStatusHistory = AppointmentStatusHistory.builder()
